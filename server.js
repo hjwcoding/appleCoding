@@ -57,10 +57,18 @@ app.get('/write', async (req, res) => {
 app.get('/edit/:id', async (req, res) => {
   let result = await db.collection('post').findOne({_id: new ObjectId(req.params.id)})
   console.log(result)
-  console.log(req.params.id)
-  res.render('edit.ejs', result);
-  result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  res.render('edit.ejs', result);
+  res.render('edit.ejs', {result : result});
+  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
+  // res.render('edit.ejs', result);
+});
+
+app.post('/edit', async (req, res) => {
+  let result = await db.collection('post').updateOne({_id: new ObjectId(req.body.id)}, {$set : {title : req.body.title, content : req.body.content}})
+  console.log(req.body);
+  res.redirect('/list');
+  // res.renderedit.ejs', {result : result});
+  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
+  // res.render('edit.ejs', result);
 });
 
 app.post('/add', async (req, res) => {
