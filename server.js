@@ -9,7 +9,10 @@ app.use(express.json())
 app.use(express.urlencoded({extended:true}))  
 
 
-const { MongoClient, ObjectId } = require('mongodb')
+const { MongoClient, ObjectId } = require('mongodb');
+const methodOverride = require('method-override');
+
+app.use(methodOverride('_method'))
 
 let db
 const url = 'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin'
@@ -38,10 +41,40 @@ app.get('/news', (req, res) => {
 });
 
 app.get('/list', async (req, res) => {
-  let result = await db.collection('post').find().toArray()
+  let result = await db.collection('post').find().limit(5).toArray()
   console.log({ 글목록 : result })
   res.render('list.ejs', { 글목록 : result });
 });
+
+// app.get('/list/1', async (req, res) => {
+//   let result = await db.collection('post').find().limit(5).toArray()
+//   console.log({ 글목록 : result })
+//   res.render('list.ejs', { 글목록 : result });
+// });
+
+// app.get('/list/2', async (req, res) => {
+//   let result = await db.collection('post').find().skip(5).limit(5).toArray()
+//   console.log({ 글목록 : result })
+//   res.render('list.ejs', { 글목록 : result });
+// });
+
+app.get('/list/:id', async (req, res) => {
+  let result = await db.collection('post').find().skip(5  * (req.params.id - 1)).limit(5).toArray()
+  console.log({ 글목록 : result })
+  res.render('list.ejs', { 글목록 : result });
+});
+
+app.get('/list/next/:id', async (req, res) => {
+  let result = await db.collection('post').find({_id : {$gt : new ObjectId(req.params.id)}}).skip(5  * (req.params.id - 1)).limit(5).toArray()
+  console.log({ 글목록 : result })
+  res.render('list.ejs', { 글목록 : result });
+});
+
+// app.get('/list/3', async (req, res) => {
+//   let result = await db.collection('post').find().skip(10).limit(5).toArray()
+//   console.log({ 글목록 : result })
+//   res.render('list.ejs', { 글목록 : result });
+// });
 
 app.get('/time', async (req, res) => {
   let serverTime = await new Date();
@@ -62,10 +95,12 @@ app.get('/edit/:id', async (req, res) => {
   // res.render('edit.ejs', result);
 });
 
-app.post('/edit', async (req, res) => {
-  let result = await db.collection('post').updateOne({_id: new ObjectId(req.body.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  console.log(req.body);
-  res.redirect('/list');
+app.put('/edit', async (req, res) => {
+  let result = await db.collection('post').updateOne({_id: 1}, {$inc : {like:1}})
+  console.log(req.body)
+  // let result = await db.collection('post').updateOne({_id: new ObjectId(req.body.id)}, {$set : {title : req.body.title, content : req.body.content}})
+  // console.log(req.body);
+  // res.redirect('/list');
   // res.renderedit.ejs', {result : result});
   // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
   // res.render('edit.ejs', result);
@@ -102,4 +137,10 @@ app.get('/detail/:id', async(res, req)=> {
     req.status(404).send('서버에러')
   }
 })
+
+app.delete('/delete', async (req, res) => {
+  console.log(req.query);
+  await db.collection('post').deleteOne({_id : new ObjectId(req.query.docid)})
+  res.send('삭제완료');
+});
 
