@@ -1,7 +1,25 @@
 const express = require('express');
 const app = express();
-
 const PORT = 8080;
+const session = require('express-session')
+const passport = require('passport')
+const LocalStrategy = require('passport-local')
+const bcrypt = require('bcrypt')
+const MongoStore = require('connect-mongo').default
+
+app.use(passport.initialize())
+app.use(session({
+  secret: '암호화에 쓸 비번',
+  resave : false,
+  saveUninitialized : false,
+  cookie : {maxAge : 60 * 60 * 1000},
+  store : MongoStore.create({
+    mongoUrl :'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin',
+    dbName : 'forum'
+  })
+}))
+
+app.use(passport.session()) 
 
 app.use(express.static(__dirname + '/public'))
 app.set('view engine', 'ejs');
@@ -144,3 +162,63 @@ app.delete('/delete', async (req, res) => {
   res.send('삭제완료');
 });
 
+app.get('/login', async (req, res) => {
+  res.render('login.ejs',);
+});
+
+app.post('/login', async (req, res, next) => {
+  passport.authenticate('local', (error, user, info) => {
+    if(error) return res.status(500).json(error);   
+    if(!user) return res.status(401).json(info.message);
+    console.log(req.user)
+    console.log(req.password)
+    req.logIn(user, (err) => {
+      if (err) return next(err)
+      res.redirect('/')
+    })
+  })(req, res, next)
+});
+
+app.get('/register', async (req, res) => {
+  res.render('register.ejs');
+});
+
+app.post('/register', async (req, res) => {
+  let hash = await bcrypt.hash(req.body.password,10) // 암호화할문자 / 암호화 몇번할지
+  console.log(hash)
+  await db.collection('user').insertOne({ 
+    username : req.body.username, 
+    password : hash})
+    res.redirect('/');
+});
+
+// 제출한 아이디와 비밀번호를 DB와 비교하는 코드
+passport.use(new LocalStrategy(async (입력한아이디, 입력한비번, cb) => {
+  let result = await db.collection('user').findOne({ username : 입력한아이디})
+  if (!result) {
+    return cb(null, false, { message: '아이디 DB에 없음' })
+  }
+  console.log(입력한비번)
+  console.log(result.password)
+  if (await bcrypt.compare(입력한비번, result.password)) {
+    return cb(null, result)
+  } else {
+    return cb(null, false, { message: '비번불일치' });
+  }
+})) 
+
+passport.serializeUser((user, done) => {
+  console.log(user)
+  process.nextTick(() => {
+    done(null, { id: user._id, username: user.username })
+  })
+})
+
+passport.deserializeUser(async (user, done) => {
+  let result = await db.collection('user').findOne({_id : new ObjectId(user.id) })
+  delete result.password
+  // 비동기처리
+  process.nextTick(() => {
+    return done(null, result)
+  })
+})
