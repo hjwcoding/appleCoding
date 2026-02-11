@@ -1,11 +1,19 @@
 const express = require('express');
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT;
 const session = require('express-session')
 const passport = require('passport')
 const LocalStrategy = require('passport-local')
 const bcrypt = require('bcrypt')
 const MongoStore = require('connect-mongo').default
+let serverTime = new Date();
+
+app.use('/list', (req, res, next) => {
+  console.log(serverTime)
+  next();
+});
+
+require('dotenv').config() 
 
 app.use(passport.initialize())
 app.use(session({
@@ -14,12 +22,15 @@ app.use(session({
   saveUninitialized : false,
   cookie : {maxAge : 60 * 60 * 1000},
   store : MongoStore.create({
-    mongoUrl :'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin',
+    mongoUrl :process.env.DB_URL,
     dbName : 'forum'
   })
 }))
 
-app.use(passport.session()) 
+
+
+app.use(passport.session());
+
 
 app.use(express.static(__dirname + '/public'))
 app.set('view engine', 'ejs');
@@ -33,13 +44,13 @@ const methodOverride = require('method-override');
 app.use(methodOverride('_method'))
 
 let db
-const url = 'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin'
+const url = process.env.DB_URL
 new MongoClient(url).connect().then((client)=>{
   console.log('DB연결성공')
   db = client.db('forum')
   // 서버 실행
-  app.listen(8080, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(process.env.PORT, () => {
+    console.log(`Server running on http://localhost:${process.env.PORT}`);
   });
 }).catch((err)=>{
   console.log(err)
@@ -59,6 +70,7 @@ app.get('/news', (req, res) => {
 });
 
 app.get('/list', async (req, res) => {
+  console.log(serverTime)
   let result = await db.collection('post').find().limit(5).toArray()
   console.log({ 글목록 : result })
   res.render('list.ejs', { 글목록 : result });
@@ -163,6 +175,7 @@ app.delete('/delete', async (req, res) => {
 });
 
 app.get('/login', async (req, res) => {
+  
   res.render('login.ejs',);
 });
 
@@ -222,3 +235,11 @@ passport.deserializeUser(async (user, done) => {
     return done(null, result)
   })
 })
+
+function loginCheck(req, res, next){
+  if(req.body.user == '' || req.body.password == ''){
+    res.send('빈값은 안됩니다.')
+  } else {
+    next();
+  }
+}
