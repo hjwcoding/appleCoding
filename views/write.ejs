@@ -14,7 +14,12 @@
      <input name="title">
      <input name="content">
      <button type="submit">전송</button>
- </form> 
+ </form>
+
+ <form class="form-box" action="/add" method="POST" enctype="multipart/form-data">
+    <input type="file" name="img1" accept="image/*">
+    <button type="submit">업로드</button>
+</form>
   
 </body>
 </html>

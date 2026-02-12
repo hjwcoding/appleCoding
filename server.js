@@ -1,3 +1,4 @@
+require('dotenv').config()
 const express = require('express');
 const app = express();
 const PORT = 8080;
@@ -7,14 +8,35 @@ const LocalStrategy = require('passport-local')
 const bcrypt = require('bcrypt')
 const MongoStore = require('connect-mongo').default
 
+const { S3Client } = require('@aws-sdk/client-s3')
+const multer = require('multer')
+const multerS3 = require('multer-s3')
+const s3 = new S3Client({
+  region : 'ap-northeast-2',
+  credentials : {
+      accessKeyId : process.env.ACCESSKEY,
+      secretAccessKey : process.env.ACCESSKEY_SECRET
+  }
+})
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'hjwcoding',
+    key: function (req, file, cb) {
+      cb(null, Date.now().toString()) //업로드시 파일명 변경가능
+    }
+  })
+})
+
 app.use(passport.initialize())
 app.use(session({
-  secret: '암호화에 쓸 비번',
+  secret: process.env.PASSWORD,
   resave : false,
   saveUninitialized : false,
   cookie : {maxAge : 60 * 60 * 1000},
   store : MongoStore.create({
-    mongoUrl :'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin',
+    mongoUrl :process.env.DB_URL,
     dbName : 'forum'
   })
 }))
@@ -33,7 +55,7 @@ const methodOverride = require('method-override');
 app.use(methodOverride('_method'))
 
 let db
-const url = 'mongodb+srv://admin:h!36640083@admin.btmoq6r.mongodb.net/?appName=admin'
+const url = process.env.DB_URL;
 new MongoClient(url).connect().then((client)=>{
   console.log('DB연결성공')
   db = client.db('forum')
@@ -57,6 +79,19 @@ app.get('/news', (req, res) => {
   // db.collection('post').insertOne({name:'kim'});
   // res.send('')
 });
+
+app.post('/add', (req, res) => {
+    upload.single('img1')(req, res, async (err)=>{
+    if (err) return res.send('에러남')
+    console.log(req.file)
+    await db.collection('post').insertOne({
+    title : req.body.title,
+    content : req.body.content,
+    img : req.file.location
+  })
+  res.send('업로드 완료')
+    })
+}) 
 
 app.get('/list', async (req, res) => {
   let result = await db.collection('post').find().limit(5).toArray()
