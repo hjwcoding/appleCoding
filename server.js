@@ -1,23 +1,37 @@
+require('dotenv').config()
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT;
+const PORT = 8080;
 const session = require('express-session')
 const passport = require('passport')
 const LocalStrategy = require('passport-local')
 const bcrypt = require('bcrypt')
 const MongoStore = require('connect-mongo').default
-let serverTime = new Date();
+const { MongoClient, ObjectId } = require('mongodb');
 
-app.use('/list', (req, res, next) => {
-  console.log(serverTime)
-  next();
-});
+const { S3Client } = require('@aws-sdk/client-s3')
+const multer = require('multer')
+const multerS3 = require('multer-s3')
+const s3 = new S3Client({
+  region : 'ap-northeast-2',
+  credentials : {
+      accessKeyId : process.env.ACCESSKEY,
+      secretAccessKey : process.env.ACCESSKEY_SECRET
+  }
+})
 
-require('dotenv').config() 
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'hjwcoding',
+    key: function (req, file, cb) {
+      cb(null, Date.now().toString()) //업로드시 파일명 변경가능
+    }
+  })
+})
 
-app.use(passport.initialize())
 app.use(session({
-  secret: '암호화에 쓸 비번',
+  secret: process.env.PASSWORD,
   resave : false,
   saveUninitialized : false,
   cookie : {maxAge : 60 * 60 * 1000},
@@ -26,35 +40,37 @@ app.use(session({
     dbName : 'forum'
   })
 }))
-
-
-
-app.use(passport.session());
-
+app.use(passport.initialize())
+app.use(passport.session())
 
 app.use(express.static(__dirname + '/public'))
 app.set('view engine', 'ejs');
 app.use(express.json())
 app.use(express.urlencoded({extended:true}))  
+app.use('/', require('./routes/game.js') )
+app.use('/', require('./routes/shop.js') )
+app.use('/', require('./routes/sports.js') )
+app.use('/', require('./routes/write.js') )
+app.use('/', require('./routes/edit.js') )
 
+let connectDB = require('./database.js') //database.js 파일 경로
 
-const { MongoClient, ObjectId } = require('mongodb');
 const methodOverride = require('method-override');
 
 app.use(methodOverride('_method'))
 
 let db
-const url = process.env.DB_URL
-new MongoClient(url).connect().then((client)=>{
+connectDB.then((client)=>{
   console.log('DB연결성공')
   db = client.db('forum')
-  // 서버 실행
   app.listen(process.env.PORT, () => {
-    console.log(`Server running on http://localhost:${process.env.PORT}`);
-  });
+    console.log('http://localhost:8080 에서 서버 실행중')
+  })
 }).catch((err)=>{
   console.log(err)
-})
+}) 
+
+
 
 
 
@@ -69,8 +85,20 @@ app.get('/news', (req, res) => {
   // res.send('')
 });
 
+app.post('/add', (req, res) => {
+    upload.single('img1')(req, res, async (err)=>{
+    if (err) return res.send('에러남')
+    console.log(req.file)
+    await db.collection('post').insertOne({
+    title : req.body.title,
+    content : req.body.content,
+    img : req.file.location
+  })
+  res.send('업로드 완료')
+    })
+}) 
+
 app.get('/list', async (req, res) => {
-  console.log(serverTime)
   let result = await db.collection('post').find().limit(5).toArray()
   console.log({ 글목록 : result })
   res.render('list.ejs', { 글목록 : result });
@@ -112,29 +140,7 @@ app.get('/time', async (req, res) => {
   res.render('serverTime.ejs', {"serverTime" : serverTime});
 });
 
-app.get('/write', async (req, res) => {
-  let serverTime = await new Date();
-  res.render('write.ejs',);
-});
 
-app.get('/edit/:id', async (req, res) => {
-  let result = await db.collection('post').findOne({_id: new ObjectId(req.params.id)})
-  console.log(result)
-  res.render('edit.ejs', {result : result});
-  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // res.render('edit.ejs', result);
-});
-
-app.put('/edit', async (req, res) => {
-  let result = await db.collection('post').updateOne({_id: 1}, {$inc : {like:1}})
-  console.log(req.body)
-  // let result = await db.collection('post').updateOne({_id: new ObjectId(req.body.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // console.log(req.body);
-  // res.redirect('/list');
-  // res.renderedit.ejs', {result : result});
-  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // res.render('edit.ejs', result);
-});
 
 app.post('/add', async (req, res) => {
   console.log(req.body);
@@ -175,7 +181,6 @@ app.delete('/delete', async (req, res) => {
 });
 
 app.get('/login', async (req, res) => {
-  
   res.render('login.ejs',);
 });
 
@@ -187,7 +192,7 @@ app.post('/login', async (req, res, next) => {
     console.log(req.password)
     req.logIn(user, (err) => {
       if (err) return next(err)
-      res.redirect('/')
+      res.redirect('/board/sub/sports')
     })
   })(req, res, next)
 });
@@ -235,11 +240,3 @@ passport.deserializeUser(async (user, done) => {
     return done(null, result)
   })
 })
-
-function loginCheck(req, res, next){
-  if(req.body.user == '' || req.body.password == ''){
-    res.send('빈값은 안됩니다.')
-  } else {
-    next();
-  }
-}
