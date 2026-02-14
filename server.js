@@ -7,6 +7,7 @@ const passport = require('passport')
 const LocalStrategy = require('passport-local')
 const bcrypt = require('bcrypt')
 const MongoStore = require('connect-mongo').default
+const { MongoClient, ObjectId } = require('mongodb');
 
 const { S3Client } = require('@aws-sdk/client-s3')
 const multer = require('multer')
@@ -29,7 +30,6 @@ const upload = multer({
   })
 })
 
-app.use(passport.initialize())
 app.use(session({
   secret: process.env.PASSWORD,
   resave : false,
@@ -40,32 +40,37 @@ app.use(session({
     dbName : 'forum'
   })
 }))
-
-app.use(passport.session()) 
+app.use(passport.initialize())
+app.use(passport.session())
 
 app.use(express.static(__dirname + '/public'))
 app.set('view engine', 'ejs');
 app.use(express.json())
 app.use(express.urlencoded({extended:true}))  
+app.use('/', require('./routes/game.js') )
+app.use('/', require('./routes/shop.js') )
+app.use('/', require('./routes/sports.js') )
+app.use('/', require('./routes/write.js') )
+app.use('/', require('./routes/edit.js') )
 
+let connectDB = require('./database.js') //database.js 파일 경로
 
-const { MongoClient, ObjectId } = require('mongodb');
 const methodOverride = require('method-override');
 
 app.use(methodOverride('_method'))
 
 let db
-const url = process.env.DB_URL;
-new MongoClient(url).connect().then((client)=>{
+connectDB.then((client)=>{
   console.log('DB연결성공')
   db = client.db('forum')
-  // 서버 실행
-  app.listen(8080, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  app.listen(process.env.PORT, () => {
+    console.log('http://localhost:8080 에서 서버 실행중')
+  })
 }).catch((err)=>{
   console.log(err)
-})
+}) 
+
+
 
 
 
@@ -135,29 +140,7 @@ app.get('/time', async (req, res) => {
   res.render('serverTime.ejs', {"serverTime" : serverTime});
 });
 
-app.get('/write', async (req, res) => {
-  let serverTime = await new Date();
-  res.render('write.ejs',);
-});
 
-app.get('/edit/:id', async (req, res) => {
-  let result = await db.collection('post').findOne({_id: new ObjectId(req.params.id)})
-  console.log(result)
-  res.render('edit.ejs', {result : result});
-  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // res.render('edit.ejs', result);
-});
-
-app.put('/edit', async (req, res) => {
-  let result = await db.collection('post').updateOne({_id: 1}, {$inc : {like:1}})
-  console.log(req.body)
-  // let result = await db.collection('post').updateOne({_id: new ObjectId(req.body.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // console.log(req.body);
-  // res.redirect('/list');
-  // res.renderedit.ejs', {result : result});
-  // result = db.collection('post').updateOne({_id: new ObjectId(req.params.id)}, {$set : {title : req.body.title, content : req.body.content}})
-  // res.render('edit.ejs', result);
-});
 
 app.post('/add', async (req, res) => {
   console.log(req.body);
@@ -209,7 +192,7 @@ app.post('/login', async (req, res, next) => {
     console.log(req.password)
     req.logIn(user, (err) => {
       if (err) return next(err)
-      res.redirect('/')
+      res.redirect('/board/sub/sports')
     })
   })(req, res, next)
 });
